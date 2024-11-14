@@ -1,5 +1,4 @@
-import adapterCloudflare from '@sveltejs/adapter-cloudflare';
-import adapterNode from '@sveltejs/adapter-node';
+import adapter from '@sveltejs/adapter-auto';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import dotenv from 'dotenv';
 
@@ -23,9 +22,7 @@ const config = {
 		// adapter-auto only supports some environments, see https://kit.svelte.dev/docs/adapter-auto for a list.
 		// If your environment is not supported or you settled on a specific environment, switch out the adapter.
 		// See https://kit.svelte.dev/docs/adapters for more information about adapters.
-		adapter: ['docker-node', 'electron-node'].includes(process.env.PUBLIC_ADAPTER)
-			? adapterNode(adapterConfig)
-			: adapterCloudflare(adapterConfig),
+		adapter: adapter(adapterConfig),
 		version: {
 			name: process.env.npm_package_version
 		},
