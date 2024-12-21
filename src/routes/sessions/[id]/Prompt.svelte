@@ -4,7 +4,6 @@
 	import Settings_2 from 'lucide-svelte/icons/settings-2';
 	import Trash_2 from 'lucide-svelte/icons/trash-2';
 	import { toast } from 'svelte-sonner';
-	import { writable, type Writable } from 'svelte/store';
 
 	import LL from '$i18n/i18n-svelte';
 	import Button from '$lib/components/Button.svelte';
@@ -12,10 +11,11 @@
 	import Field from '$lib/components/Field.svelte';
 	import FieldSelectModel from '$lib/components/FieldSelectModel.svelte';
 	import FieldTextEditor from '$lib/components/FieldTextEditor.svelte';
+	import { ConnectionType } from '$lib/connections';
 	import { loadKnowledge, type Knowledge } from '$lib/knowledge';
-	import { knowledgeStore, settingsStore } from '$lib/localStorage';
+	import { knowledgeStore, serversStore } from '$lib/localStorage';
 	import type { Editor, Message, Session } from '$lib/sessions';
-	import { generateStorageId } from '$lib/utils';
+	import { generateRandomId } from '$lib/utils';
 
 	import KnowledgeSelect from './KnowledgeSelect.svelte';
 
@@ -24,34 +24,51 @@
 		knowledge?: Knowledge;
 	};
 
-	export let editor: Writable<Editor>;
-	export let session: Writable<Session>;
-	export let handleSubmit: () => void;
-	export let stopCompletion: () => void;
-	export let scrollToBottom: (shouldForceScroll: boolean) => void;
+	interface Props {
+		editor: Editor;
+		session: Session;
+		modelName: string | undefined;
+		handleSubmit: () => void;
+		stopCompletion: () => void;
+		scrollToBottom: (shouldForceScroll: boolean) => void;
+	}
 
-	let isOllama = false;
-	let attachments: Writable<KnowledgeAttachment[]> = writable([]);
+	let {
+		editor = $bindable(),
+		session = $bindable(),
+		modelName = $bindable(),
+		handleSubmit,
+		stopCompletion,
+		scrollToBottom
+	}: Props = $props();
 
-	$: isOllama = $settingsStore.models?.find((m) => m.name === $session.model)?.api === 'ollama';
-	$: $attachments.length && scrollToBottom(true);
+	let attachments: KnowledgeAttachment[] = $state([]);
+
+	const isOllamaFamily = $derived(
+		$serversStore.find((s) => s.id === session.model?.serverId)?.connectionType ===
+			ConnectionType.Ollama
+	);
+
+	$effect(() => {
+		attachments.length && scrollToBottom(true);
+	});
 
 	function toggleCodeEditor() {
-		$editor.isCodeEditor = !$editor.isCodeEditor;
-		$editor.shouldFocusTextarea = !$editor.isCodeEditor;
+		editor.isCodeEditor = !editor.isCodeEditor;
+		editor.shouldFocusTextarea = !editor.isCodeEditor;
 	}
 
 	function switchToMessages() {
-		$editor.view = 'messages';
+		editor.view = 'messages';
 		scrollToBottom(true);
 	}
 
 	function switchToControls() {
-		if (!isOllama) {
+		if (!isOllamaFamily) {
 			toast.warning($LL.controlsOnlyAvailableForOllama());
 			return;
 		}
-		$editor.view = 'controls';
+		editor.view = 'controls';
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
@@ -62,70 +79,69 @@
 	}
 
 	function handleSelectKnowledge(fieldId: string, knowledgeId: string) {
-		$attachments = $attachments.map((a) =>
+		attachments = attachments.map((a) =>
 			a.fieldId === fieldId ? { ...a, knowledge: loadKnowledge(knowledgeId) } : a
 		);
 	}
 
 	function handleDeleteAttachment(fieldId: string) {
-		$attachments = [...$attachments.filter((a) => a.fieldId !== fieldId)];
+		attachments = [...attachments.filter((a) => a.fieldId !== fieldId)];
 	}
 
 	function submit() {
-		if ($attachments.length) {
+		if (attachments.length) {
 			const attachmentMessages: Message[] = [];
-			$attachments.forEach((a) => {
+			attachments.forEach((a) => {
 				if (a.knowledge)
 					attachmentMessages.push({
 						role: 'user',
 						knowledge: a.knowledge,
 						content: `
-CONTEXT
----
-${a.knowledge.name}
----
-${a.knowledge.content}
+<CONTEXT>
+	<CONTEXT_NAME>${a.knowledge.name}</CONTEXT_NAME>
+	<CONTEXT_CONTENT>${a.knowledge.content}</CONTEXT_CONTENT>
+</CONTEXT>
 `
 					});
 			});
-			$session.messages = [...$session.messages, ...attachmentMessages];
-			$attachments = [];
+			session.messages = [...session.messages, ...attachmentMessages];
+			attachments = [];
 		}
 
 		handleSubmit();
 	}
 </script>
 
-<div class="prompt-editor" class:prompt-editor--fullscreen={$editor.isCodeEditor}>
+<div class="prompt-editor" class:prompt-editor--fullscreen={editor.isCodeEditor}>
 	<div class="prompt-editor__form">
 		<div class="prompt-editor__project">
-			<FieldSelectModel isLabelVisible={false} bind:model={$session.model} />
+			<FieldSelectModel isLabelVisible={false} bind:value={modelName} />
 
 			<nav class="segmented-nav">
 				<div
 					class="segmented-nav__button"
-					class:segmented-nav__button--active={$editor.view === 'messages'}
+					class:segmented-nav__button--active={editor.view === 'messages'}
 				>
 					<Button
 						aria-label={$LL.messages()}
 						variant="icon"
 						on:click={switchToMessages}
 						class="h-full"
-						isActive={$editor.view === 'messages'}
+						isActive={editor.view === 'messages'}
 					>
 						<MessageSquareText class="base-icon" />
 					</Button>
 				</div>
 				<div
 					class="segmented-nav__button"
-					class:segmented-nav__button--active={$editor.view === 'controls'}
+					class:segmented-nav__button--active={editor.view === 'controls'}
 				>
 					<Button
 						aria-label={$LL.controls()}
 						variant="icon"
 						on:click={switchToControls}
 						class="h-full"
-						isActive={$editor.view === 'controls'}
+						isActive={editor.view === 'controls'}
 					>
 						<Settings_2 class="base-icon" />
 					</Button>
@@ -133,7 +149,7 @@ ${a.knowledge.content}
 			</nav>
 
 			<Button
-				variant={$editor.isCodeEditor ? 'default' : 'outline'}
+				variant={editor.isCodeEditor ? 'default' : 'outline'}
 				class="prompt-editor__toggle"
 				on:click={toggleCodeEditor}
 			>
@@ -141,24 +157,24 @@ ${a.knowledge.content}
 			</Button>
 		</div>
 
-		{#if $editor.isCodeEditor}
-			<FieldTextEditor label={$LL.prompt()} handleSubmit={submit} bind:value={$editor.prompt} />
+		{#if editor.isCodeEditor}
+			<FieldTextEditor label={$LL.prompt()} handleSubmit={submit} bind:value={editor.prompt} />
 		{:else}
 			<Field name="prompt">
 				<textarea
 					name="prompt"
 					class="prompt-editor__textarea"
 					placeholder={$LL.promptPlaceholder()}
-					bind:this={$editor.promptTextarea}
-					bind:value={$editor.prompt}
-					on:keydown={handleKeyDown}
-				/>
+					bind:this={editor.promptTextarea}
+					bind:value={editor.prompt}
+					onkeydown={handleKeyDown}
+				></textarea>
 			</Field>
 		{/if}
 
-		{#if $attachments.length}
+		{#if attachments.length}
 			<div class="attachments">
-				{#each $attachments as attachment (attachment.fieldId)}
+				{#each attachments as attachment (attachment.fieldId)}
 					<div class="attachment">
 						<div class="attachment__knowledge">
 							<KnowledgeSelect
@@ -166,7 +182,7 @@ ${a.knowledge.content}
 								options={$knowledgeStore?.filter(
 									(k) =>
 										// Only filter out knowledge that's selected in OTHER attachments
-										!$attachments.find(
+										!attachments.find(
 											(a) =>
 												a.fieldId !== attachment.fieldId && // Skip current attachment
 												a.knowledge?.id === k.id
@@ -196,7 +212,7 @@ ${a.knowledge.content}
 				<Button
 					variant="outline"
 					on:click={() => {
-						$attachments = [...$attachments, { fieldId: generateStorageId() }];
+						attachments = [...attachments, { fieldId: generateRandomId() }];
 					}}
 					data-testid="knowledge-attachment"
 				>
@@ -205,14 +221,14 @@ ${a.knowledge.content}
 			</div>
 
 			<div class="prompt-editor__submit">
-				{#if $editor.messageIndexToEdit !== null}
+				{#if editor.messageIndexToEdit !== null}
 					<Button
 						class="h-full"
 						variant="outline"
 						on:click={() => {
-							$editor.prompt = '';
-							$editor.messageIndexToEdit = null;
-							$editor.isCodeEditor = false;
+							editor.prompt = '';
+							editor.messageIndexToEdit = null;
+							editor.isCodeEditor = false;
 						}}
 					>
 						{$LL.cancel()}
@@ -221,13 +237,13 @@ ${a.knowledge.content}
 
 				<ButtonSubmit
 					handleSubmit={submit}
-					hasMetaKey={$editor.isCodeEditor}
-					disabled={!$editor.prompt || !$session.model}
+					hasMetaKey={editor.isCodeEditor}
+					disabled={!editor.prompt || !session.model || editor.isCompletionInProgress}
 				>
 					{$LL.run()}
 				</ButtonSubmit>
 
-				{#if $editor.isCompletionInProgress}
+				{#if editor.isCompletionInProgress}
 					<Button
 						class="h-full"
 						title={$LL.stopCompletion()}

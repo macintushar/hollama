@@ -6,14 +6,14 @@ import {
 	MOCK_OPENAI_MODELS,
 	MOCK_SESSION_1_RESPONSE_1,
 	mockCompletionResponse,
-	mockOpenAIModelsResponse,
-	mockTagsResponse
+	mockOllamaModelsResponse,
+	mockOpenAIModelsResponse
 } from './utils';
 
 test.describe('FieldSelect', () => {
 	test('filters options, shows selected value, and allows clearing', async ({ page }) => {
 		await page.goto('/settings');
-		await mockTagsResponse(page);
+		await mockOllamaModelsResponse(page);
 		await page.goto('/sessions/qbhc0q');
 
 		const modelCombobox = page.getByLabel('Available models');
@@ -24,12 +24,8 @@ test.describe('FieldSelect', () => {
 
 		// Open the dropdown
 		await modelCombobox.click();
-
-		// Check that the groups are visible
-		await expect(page.getByText('Recently used models', { exact: true })).toBeVisible();
+		await expect(page.getByText('Recently used models', { exact: true })).not.toBeVisible();
 		await expect(page.getByText('Other models', { exact: true })).toBeVisible();
-
-		// Check that all options are visible
 		await expect(page.getByRole('option')).toHaveCount(MOCK_API_TAGS_RESPONSE.models.length);
 
 		// Filter options
@@ -86,7 +82,7 @@ test.describe('FieldSelect', () => {
 	test('models are correctly grouped and sorted', async ({ page }) => {
 		const newSessionButton = page.getByTestId('new-session');
 		await page.goto('/settings');
-		await mockTagsResponse(page);
+		await mockOllamaModelsResponse(page);
 
 		await page.getByText('Sessions', { exact: true }).click();
 		await newSessionButton.click();
@@ -135,7 +131,7 @@ test.describe('FieldSelect', () => {
 
 	test('Ollama models have an ollama badge', async ({ page }) => {
 		await page.goto('/settings');
-		await mockTagsResponse(page);
+		await mockOllamaModelsResponse(page);
 
 		await page.goto('/sessions/new');
 		await page.getByLabel('Available models').click();

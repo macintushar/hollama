@@ -3,16 +3,18 @@
 
 	import LL from '$i18n/i18n-svelte';
 	import { Sitemap } from '$lib/sitemap';
-	import { generateStorageId } from '$lib/utils';
+	import { generateRandomId } from '$lib/utils';
 
 	import Button from './Button.svelte';
 	import { generateNewUrl } from './ButtonNew';
 
 	export let sitemap: Sitemap;
 	let newId: string;
+	let href: string;
 
 	function setId() {
-		newId = generateStorageId();
+		newId = generateRandomId();
+		href = generateNewUrl(sitemap, newId);
 	}
 
 	onMount(setId);
@@ -23,7 +25,7 @@
 		data-testid={sitemap === Sitemap.SESSIONS ? 'new-session' : 'new-knowledge'}
 		class="w-full"
 		variant="outline"
-		href={generateNewUrl(sitemap, newId)}
+		{href}
 		on:click={setId}
 	>
 		{sitemap === Sitemap.SESSIONS ? $LL.newSession() : $LL.newKnowledge()}
